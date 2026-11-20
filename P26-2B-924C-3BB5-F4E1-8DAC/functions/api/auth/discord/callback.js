@@ -29,7 +29,7 @@ async function exchangeCode(env, code, redirectUri) {
       redirect_uri: redirectUri,
     }),
     signal: AbortSignal.timeout(10000),
-    redirect: "error",
+    redirect: "manual",
   });
   if (!token.ok) {
     const { error } = await token.json().catch(() => ({})) ?? {};
@@ -47,7 +47,7 @@ async function fetchUser(accessToken) {
   const response = await fetch("https://discord.com/api/users/@me", {
     headers: { Authorization: `Bearer ${accessToken}` },
     signal: AbortSignal.timeout(10000),
-    redirect: "error",
+    redirect: "manual",
   });
   if (!response.ok) throw new Error("Perfil do Discord indisponível.");
   const { id, global_name: displayName, username, avatar: hash } = await response.json();

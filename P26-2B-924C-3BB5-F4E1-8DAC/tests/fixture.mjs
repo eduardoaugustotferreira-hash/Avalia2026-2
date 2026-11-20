@@ -97,6 +97,7 @@ export function mockDiscord(origin) {
       return upstreamFetch(input, init);
     }
     const request = new Request(input, init);
+    assert.equal(request.redirect, 'manual', 'Requisições OAuth2 com credenciais devem rejeitar redirecionamentos sem segui-los.');
     if (url.pathname === '/api/oauth2/token') {
       assert.equal(request.method, 'POST');
       const fields = await request.formData();
