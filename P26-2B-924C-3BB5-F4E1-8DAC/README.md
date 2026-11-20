@@ -4,7 +4,7 @@
 - **Estudante:** Eduardo Augusto Teresin Ferreira
 - **Turma:** 2B
 - **Chave Única:** `P26-2B-924C-3BB5-F4E1-8DAC`
-- **URL_CLOUDFLARE:** pendente de publicação autorizada
+- **URL_CLOUDFLARE:** https://projeto-p26-2b-924c-3bb5-f4e1-8dac.pages.dev
 
 ---
 
