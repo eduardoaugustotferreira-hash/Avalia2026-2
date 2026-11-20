@@ -92,14 +92,28 @@ describe('Currículo e login em SQLite local', () => {
     assert.deepEqual(await revoked.json(), { user: null });
   });
 
-  test('callback sem estado e token recusado não criam sessão', async (testContext) => {
+  test('callback mantém resposta genérica e registra diagnósticos sanitizados no servidor', async (testContext) => {
     const { env } = fresh(testContext);
     const client = createClient(env);
+    const log = testContext.mock.method(console, 'error', () => {});
+    const failureOf = (r) => {
+      assert.equal(r.status, 302);
+      return new URL(r.headers.get('Location'), origin).searchParams.get('auth_error');
+    };
     const noState = await client('/api/auth/discord/callback?code=student');
-    assert.ok(noState.status >= 300 && noState.status < 500);
-    assert.deepEqual(await (await client('/api/session')).json(), { user: null });
-    const declined = await authorize(client, 'unknown');
-    assert.ok(declined.status >= 300 && declined.status < 500);
+    assert.equal(failureOf(noState), 'invalid_state');
+    for (const code of ['unknown', 'client-rejected', 'token-unavailable', 'profile-unavailable']) {
+      assert.equal(failureOf(await authorize(client, code)), 'discord_failed');
+    }
+    env.DB.batch = async () => { throw new Error('Falha de D1 simulada'); };
+    assert.equal(failureOf(await authorize(client, 'student')), 'discord_failed');
+    assert.deepEqual(log.mock.calls.map(call => call.arguments), [
+      ['discord_oauth_failure', { stage: 'token_exchange', status: 400, discordError: 'invalid_grant' }],
+      ['discord_oauth_failure', { stage: 'token_exchange', status: 401, discordError: 'invalid_client' }],
+      ['discord_oauth_failure', { stage: 'token_exchange', status: 502, discordError: 'other' }],
+      ['discord_oauth_failure', { stage: 'profile' }],
+      ['discord_oauth_failure', { stage: 'session' }],
+    ]);
     assert.deepEqual(await (await client('/api/session')).json(), { user: null });
   });
 

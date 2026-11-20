@@ -13,7 +13,12 @@ function redirectBack(query, sessionCookie) {
   return new Response(null, { status: 302, headers });
 }
 
-async function fetchUser(env, code, redirectUri) {
+function loginFailed(stage, details = {}) {
+  console.error("discord_oauth_failure", { stage, ...details });
+  return redirectBack("auth_error=discord_failed");
+}
+
+async function exchangeCode(env, code, redirectUri) {
   const token = await fetch("https://discord.com/api/oauth2/token", {
     method: "POST",
     body: new URLSearchParams({
@@ -26,10 +31,19 @@ async function fetchUser(env, code, redirectUri) {
     signal: AbortSignal.timeout(10000),
     redirect: "error",
   });
-  if (!token.ok) throw new Error("Discord recusou o código.");
+  if (!token.ok) {
+    const { error } = await token.json().catch(() => ({})) ?? {};
+    return {
+      status: token.status,
+      discordError: error === "invalid_client" || error === "invalid_grant" ? error : "other",
+    };
+  }
   const { access_token: accessToken } = await token.json();
   if (typeof accessToken !== "string" || !accessToken) throw new Error("Token do Discord ausente.");
+  return { accessToken };
+}
 
+async function fetchUser(accessToken) {
   const response = await fetch("https://discord.com/api/users/@me", {
     headers: { Authorization: `Bearer ${accessToken}` },
     signal: AbortSignal.timeout(10000),
@@ -63,11 +77,21 @@ export const onRequest = route({
       return redirectBack("auth_error=unavailable");
     }
 
+    let stage = "token_exchange";
     try {
-      const user = await fetchUser(env, code, new URL("/api/auth/discord/callback", url.origin).href);
-      return redirectBack("login=success", await createSession(request, env, user));
+      const redirectUri = new URL("/api/auth/discord/callback", url.origin).href;
+      const exchange = await exchangeCode(env, code, redirectUri);
+      if (!exchange.accessToken) {
+        return loginFailed(stage, { status: exchange.status, discordError: exchange.discordError });
+      }
+
+      stage = "profile";
+      const user = await fetchUser(exchange.accessToken);
+      stage = "session";
+      const sessionCookie = await createSession(request, env, user);
+      return redirectBack("login=success", sessionCookie);
     } catch {
-      return redirectBack("auth_error=discord_failed");
+      return loginFailed(stage);
     }
   },
 });

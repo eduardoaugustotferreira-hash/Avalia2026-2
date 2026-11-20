@@ -105,7 +105,11 @@ export function mockDiscord(origin) {
       assert.equal(fields.get('grant_type'), 'authorization_code');
       assert.equal(fields.get('redirect_uri'), origin + '/api/auth/discord/callback');
       const code = fields.get('code');
-      return people.has(code)
+      if (code === 'client-rejected') return Response.json({ error: 'invalid_client' }, { status: 401 });
+      if (code === 'token-unavailable') {
+        return Response.json({ error: 'upstream_failure', error_description: 'Detalhe bruto de teste' }, { status: 502 });
+      }
+      return people.has(code) || code === 'profile-unavailable'
         ? Response.json({ access_token: code, token_type: 'Bearer' })
         : Response.json({ error: 'invalid_grant' }, { status: 400 });
     }
